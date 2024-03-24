@@ -21,6 +21,7 @@ import {
   symEncrypt,
 } from "../../src/crypto";
 const { validateEncryption } = require("./utils");
+import { error } from "console";
 
 const delay = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
@@ -474,7 +475,20 @@ describe("Onion Routing", () => {
       expect(decrypted).toBe(b64Message);
     });
 
-    test.todo("Hidden test - Can rsa encrypt and decrypt - 1pt");
+    it("Can rsa encrypt and decrypt - 1pt", async () => {
+      const { publicKey, privateKey } = await generateRsaKeyPair();
+
+      const b64Message = btoa("J'adore la crypto");
+
+      const encrypted = await rsaEncrypt(
+        b64Message,
+        await exportPubKey(publicKey)
+      );
+      const decrypted = await rsaDecrypt(encrypted, privateKey);
+
+      // verify that the retrieved private key corresponds to the public key in the registry
+      expect(decrypted).toBe(b64Message);
+    });
 
     it("Can generate symmetric key - 0.5 pt", async () => {
       const symKey = await createRandomSymmetricKey();
@@ -501,7 +515,7 @@ describe("Onion Routing", () => {
       expect(strSymKey).not.toBe("");
     });
 
-    it("Can symmetrically encrypt and decrypt - 0pt", async () => {
+    it("Can symmetrically encrypt and decrypt - 1pt", async () => {
       const symKey = await createRandomSymmetricKey();
 
       const b64Message = btoa("HelloWorld");
@@ -513,8 +527,6 @@ describe("Onion Routing", () => {
       // verify that the retrieved private key corresponds to the public key in the registry
       expect(decrypted).toBe(b64Message);
     });
-
-    test.todo("Hidden test - Can symmetrically encrypt and decrypt - 1pt");
   });
 
   describe("Can forward messages through the network - 10 pt", () => {
@@ -698,7 +710,39 @@ describe("Onion Routing", () => {
       await closeAllServers(servers);
     });
 
-    test.todo("Hidden test - Can send an empty message - 1pt");
+    it("Can send an empty message - 1pt", async () => {
+      await sendMessage(
+        BASE_USER_PORT + 0,
+        "",
+        1
+      );
+
+      const circuit = await getLastCircuit(BASE_USER_PORT + 0);
+
+      for (let index = 0; index < circuit.length - 1; index++) {
+        const lastReceivedEncryptedMessage =
+          await getLastReceivedEncryptedMessage(
+            BASE_ONION_ROUTER_PORT + circuit[index]
+          );
+
+        const lastReceivedDecryptedMessage =
+          await getLastReceivedDecryptedMessage(
+            BASE_ONION_ROUTER_PORT + circuit[index]
+          );
+
+        const privateKey = await getPrivateKey(
+          BASE_ONION_ROUTER_PORT + circuit[index]
+        );
+
+        const isValid = await validateEncryption(
+          lastReceivedEncryptedMessage,
+          lastReceivedDecryptedMessage,
+          privateKey
+        );
+
+        expect(isValid).toBeTruthy();
+      }
+    });
 
     test.todo("Hidden test - Edge case #2 - 1pt");
   });

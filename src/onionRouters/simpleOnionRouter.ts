@@ -12,7 +12,7 @@ export async function simpleOnionRouter(nodeId: number) {
 
   var lastReceivedEncryptedMessage: string | null = null;
   var lastReceivedDecryptedMessage: string | null = null;
-  var lastMessageDestination: string | null = null;
+  var lastMessageDestination: number | null = null;
 
   onionRouter.get("/status", (req, res) => {
     res.send("live");
@@ -44,7 +44,27 @@ export async function simpleOnionRouter(nodeId: number) {
 
   onionRouter.get("/getPrivateKey", async (req, res) => {
     res.json({ result: privateKey });
-  });  
+  });
+  
+  onionRouter.post("/message", async (req, res) => {
+    const layer = req.body.message;
+    const AESKey = privateKey ? await rsaDecrypt(layer.slice(0, 344), await importPrvKey(privateKey)) : null;
+    const payload = AESKey ? await symDecrypt(AESKey, layer.slice(344)) : null;
+
+    lastReceivedEncryptedMessage = layer;
+    lastReceivedDecryptedMessage = payload ? payload.slice(10) : null;
+    lastMessageDestination = payload ? parseInt(payload.slice(0, 10), 10) : null;
+
+    if (lastMessageDestination) {
+      await fetch(`http://localhost:${lastMessageDestination}/message`, {
+        method: "POST",
+        body: JSON.stringify({ message: lastReceivedDecryptedMessage }),
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    res.status(200).send({ result: "Success" });
+  });
 
   const server = onionRouter.listen(BASE_ONION_ROUTER_PORT + nodeId, () => {
     console.log(
